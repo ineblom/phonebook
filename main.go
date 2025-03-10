@@ -99,15 +99,27 @@ func AddContactsHandler(db *Database) fiber.Handler {
 	}
 }
 
+type GetContactsRequest struct {
+	UserKey string `json:"user_key"`
+}
+
+type GetContactsResult struct {
+	Name    string `json:"name"`
+	UserKey string `json:"user_key"`
+}
+
 func GetContactsHandler(db *Database) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ctx := c.UserContext()
-		userKey := c.Locals("userKey").(string)
+		var request GetContactsRequest
+		if err := c.BodyParser(&request); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+		}
 
-		query := "FOR v, e in 1..1 OUTBOUND @user contacts RETURN { number: v.number, name: e.name }"
+		query := "FOR v, e in 1..1 OUTBOUND @user contacts RETURN { name: e.name, user_key: v._key }"
 		opts := arangodb.QueryOptions{
 			BindVars: map[string]interface{}{
-				"user": "users/" + userKey,
+				"user": "users/" + request.UserKey,
 			},
 		}
 		cursor, err := db.phonebook.Query(ctx, query, &opts)
@@ -116,8 +128,10 @@ func GetContactsHandler(db *Database) fiber.Handler {
 		}
 		defer cursor.Close()
 
+		var result []GetContactsResult
+
 		for {
-			var contact Contact
+			var contact GetContactsResult
 			_, err := cursor.ReadDocument(ctx, &contact)
 
 			if shared.IsNoMoreDocuments(err) {
@@ -126,10 +140,10 @@ func GetContactsHandler(db *Database) fiber.Handler {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to read contact"})
 			}
 
-			log.Printf("contact: %v - %v\n", contact.Name, contact.Number)
+			result = append(result, contact)
 		}
 
-		return c.SendStatus(200)
+		return c.JSON(result)
 	}
 }
 
@@ -179,7 +193,6 @@ UX:
   4. Show graph of contacts etc.
 
 TODO:
-  - Add contacts route.
 
 	- Protect accounts with email/password, 2FA, etc. Phone number recycling
 		could give users access to other people's accounts. Look into further.
