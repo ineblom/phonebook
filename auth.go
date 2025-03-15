@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
+	"github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/nyaruka/phonenumbers"
@@ -21,8 +22,12 @@ type VerificationAttempt struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-type VerificationRequest struct {
+type RequestVerificationRequest struct {
 	Number string `json:"number"`
+}
+
+type CancelVerificationRequest struct {
+	AttemptKey string `json:"attempt_key"`
 }
 
 type VerifyRequest struct {
@@ -132,7 +137,7 @@ func RequestVerificationHandler(db *Database) fiber.Handler {
 		ctx, cancelCtx := context.WithTimeout(c.UserContext(), time.Second*30)
 		defer cancelCtx()
 
-		var req VerificationRequest
+		var req RequestVerificationRequest
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Invalid request",
@@ -156,6 +161,35 @@ func RequestVerificationHandler(db *Database) fiber.Handler {
 		return c.JSON(fiber.Map{
 			"message": "Verifcation code sent",
 			"id":      attemptKey,
+		})
+	}
+}
+
+func CancelVerificationHandler(db *Database) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, cancelCtx := context.WithTimeout(c.UserContext(), time.Second*30)
+		defer cancelCtx()
+
+		var req CancelVerificationRequest
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid request",
+			})
+		}
+
+		_, err := db.verification_attempts.DeleteDocument(ctx, req.AttemptKey)
+		if shared.IsNotFound(err) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Attempt not found",
+			})
+		} else if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to cancel verification attempt",
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"message": "Verification canceled",
 		})
 	}
 }

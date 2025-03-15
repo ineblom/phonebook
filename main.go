@@ -163,6 +163,7 @@ func RunWebServer(db *Database) {
 	})
 
 	app.Post("/request-verification", RequestVerificationHandler(db))
+	app.Post("/cancel-verification", CancelVerificationHandler(db))
 	app.Post("/verify", VerifyRequestHandler(db))
 
 	api := app.Group("/api")
