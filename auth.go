@@ -198,6 +198,8 @@ func VerifyRequestHandler(db *Database) fiber.Handler {
 			})
 		}
 
+		attempt.Key = req.AttemptKey
+
 		valid, err := VerifyCode(ctx, db, &attempt, req.Code)
 		if err != nil {
 			log.Printf("Failed to verify code: %v", err)

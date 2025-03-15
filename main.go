@@ -7,6 +7,7 @@ import (
 	"github.com/arangodb/go-driver/v2/arangodb"
 	"github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
 type User struct {
@@ -149,6 +150,13 @@ func GetContactsHandler(db *Database) fiber.Handler {
 
 func RunWebServer(db *Database) {
 	app := fiber.New()
+
+	// Add CORS middleware
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+	}))
 
 	app.Get("/ping", func(c *fiber.Ctx) error {
 		return c.SendString("pong")
