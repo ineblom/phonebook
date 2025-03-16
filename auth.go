@@ -38,15 +38,6 @@ type VerifyRequest struct {
 const VerificationExpiryTime = time.Minute * 5
 const JWTSecret = "MyAwesomeSecretForJWT"
 
-func IsValidPhoneNumber(number string) bool {
-	phoneNumber, err := phonenumbers.Parse(number, "SE")
-	if err != nil {
-		return false
-	}
-
-	return phonenumbers.IsValidNumber(phoneNumber)
-}
-
 func CreateVerificationAttempt(ctx context.Context, db *Database, number string) (string, error) {
 	// TODO: Ensure only one verification attempt per user.
 	// Delete old ones on create or use number for key?
@@ -144,13 +135,23 @@ func RequestVerificationHandler(db *Database) fiber.Handler {
 			})
 		}
 
-		if !IsValidPhoneNumber(req.Number) {
+		number, err := phonenumbers.Parse(req.Number, "SE")
+		if err != nil {
+			log.Printf("Failed to parse phone number: %v", err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Invalid phone number",
 			})
 		}
 
-		attemptKey, err := CreateVerificationAttempt(ctx, db, req.Number)
+		if !phonenumbers.IsValidNumberForRegion(number, "SE") {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid phone number for region.",
+			})
+		}
+
+		formattedNumber := phonenumbers.Format(number, phonenumbers.E164)
+
+		attemptKey, err := CreateVerificationAttempt(ctx, db, formattedNumber)
 		if err != nil {
 			log.Printf("Failed to create verification attempt: %v", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

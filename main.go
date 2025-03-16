@@ -8,6 +8,7 @@ import (
 	"github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/nyaruka/phonenumbers"
 )
 
 type User struct {
@@ -15,8 +16,9 @@ type User struct {
 }
 
 type Contact struct {
-	Number string `json:"number"`
-	Name   string `json:"name"`
+	CountryCode string `json:"country_code"`
+	Number      string `json:"number"`
+	Name        string `json:"name"`
 }
 
 type ContactEdge struct {
@@ -37,12 +39,19 @@ func AddContactsHandler(db *Database) fiber.Handler {
 		ctx := c.UserContext()
 
 		for _, contact := range contacts {
-			if !IsValidPhoneNumber(contact.Number) {
+
+			number, err := phonenumbers.Parse(contact.Number, contact.CountryCode)
+			if err != nil {
+				log.Printf("Failed to parse phone number: %v", err)
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid phone number"})
+			}
+
+			if !phonenumbers.IsValidNumberForRegion(number, contact.CountryCode) {
 				log.Printf("Provided invalid phone number, skipping...")
 				continue
 			}
 
-			contactUserKey, err := GetOrCreateUser(ctx, db, contact.Number)
+			contactUserKey, err := GetOrCreateUser(ctx, db, phonenumbers.Format(number, phonenumbers.E164))
 			if err != nil {
 				log.Printf("Failed to GetOrCreateUser in add contacts handler: %v", err)
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create contact relationship"})
@@ -202,6 +211,8 @@ UX:
   4. Show graph of contacts etc.
 
 TODO:
+	-	Make sure to format submitted numbers, match users correctly.
+		Add country to request verification.
 
 	- Protect accounts with email/password, 2FA, etc. Phone number recycling
 		could give users access to other people's accounts. Look into further.
