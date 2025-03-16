@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
 	"github.com/arangodb/go-driver/v2/arangodb/shared"
@@ -21,6 +22,10 @@ type Contact struct {
 	Name        string `json:"name"`
 }
 
+type AddContactsRequest struct {
+	Contacts []Contact `json:"contacts"`
+}
+
 type ContactEdge struct {
 	From string `json:"_from"`
 	To   string `json:"_to"`
@@ -29,8 +34,8 @@ type ContactEdge struct {
 
 func AddContactsHandler(db *Database) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var contacts []Contact
-		if err := c.BodyParser(&contacts); err != nil {
+		var request AddContactsRequest
+		if err := c.BodyParser(&request); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 		}
 
@@ -38,26 +43,28 @@ func AddContactsHandler(db *Database) fiber.Handler {
 
 		ctx := c.UserContext()
 
-		for _, contact := range contacts {
+		for _, contact := range request.Contacts {
+			countryCode := strings.ToUpper(contact.CountryCode)
 
-			number, err := phonenumbers.Parse(contact.Number, contact.CountryCode)
+			number, err := phonenumbers.Parse(contact.Number, countryCode)
 			if err != nil {
-				log.Printf("Failed to parse phone number: %v", err)
+				log.Printf("Failed to parse phone number: %v %v - %v", countryCode, contact.Number, err)
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid phone number"})
 			}
 
-			if !phonenumbers.IsValidNumberForRegion(number, contact.CountryCode) {
+			if !phonenumbers.IsValidNumberForRegion(number, countryCode) {
 				log.Printf("Provided invalid phone number, skipping...")
 				continue
 			}
 
-			contactUserKey, err := GetOrCreateUser(ctx, db, phonenumbers.Format(number, phonenumbers.E164))
+			formattedNumber := phonenumbers.Format(number, phonenumbers.E164)
+
+			contactUserKey, err := GetOrCreateUser(ctx, db, formattedNumber)
 			if err != nil {
 				log.Printf("Failed to GetOrCreateUser in add contacts handler: %v", err)
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create contact relationship"})
 			}
 
-			// Check if contact relationship already exists
 			query := "FOR c IN contacts FILTER c._from == @from AND c._to == @to LIMIT 1 RETURN c"
 			opts := arangodb.QueryOptions{
 				BindVars: map[string]interface{}{
@@ -105,7 +112,7 @@ func AddContactsHandler(db *Database) fiber.Handler {
 			}
 		}
 
-		return c.SendStatus(fiber.StatusOK)
+		return c.JSON(fiber.Map{"message": "Contacts added"})
 	}
 }
 
