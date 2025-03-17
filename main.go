@@ -116,10 +116,6 @@ func AddContactsHandler(db *Database) fiber.Handler {
 	}
 }
 
-type GetContactsRequest struct {
-	UserKey string `json:"user_key"`
-}
-
 type GetContactsResult struct {
 	Name    string `json:"name"`
 	UserKey string `json:"user_key"`
@@ -128,15 +124,16 @@ type GetContactsResult struct {
 func GetContactsHandler(db *Database) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ctx := c.UserContext()
-		var request GetContactsRequest
-		if err := c.BodyParser(&request); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+
+		userKey := c.Query("user")
+		if userKey == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "User key is required"})
 		}
 
 		query := "FOR v, e in 1..1 OUTBOUND @user contacts RETURN { name: e.name, user_key: v._key }"
 		opts := arangodb.QueryOptions{
 			BindVars: map[string]interface{}{
-				"user": "users/" + request.UserKey,
+				"user": "users/" + userKey,
 			},
 		}
 		cursor, err := db.phonebook.Query(ctx, query, &opts)
