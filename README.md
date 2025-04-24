@@ -5,6 +5,8 @@ we can map out social connections and discover patterns that would otherwise rem
 creates a visual graph representation of these connections, allowing users to explore their place in the
 broader social network.
 
+This is the backend. A react native client can be found [here](https://www.github.com/ineblom/phonebook_client).
+
 ## Features
 
 - Interactive graph visualization of contact networks. Streaming in nodes as you explore.
